@@ -1,6 +1,5 @@
 import numpy as np
 import torchvision.datasets
-import matplotlib.pyplot as plt
 from myframework import (Tensor, Sequential, Conv2d, AvgPool2d, Tanh, 
                          Flatten, Linear, CrossEntropyLoss, Adam, no_grad, profiler)
 
@@ -25,9 +24,10 @@ criterion = CrossEntropyLoss()
 
 batch_size = 128
 n_epochs = 3
-n_samples = 2000 
+n_samples = 2000 # Для быстрой проверки
 
-print("\nНачинаем обучение (Гибридный режим CPU-Padding / GPU-MatMul)...")
+print("\nНачинаем обучение (Гибридный режим: индексация на CPU, умножение на GPU)...")
+print("-" * 60)
 for epoch in range(n_epochs):
     order = np.random.permutation(n_samples)
     epoch_loss, correct = 0, 0
@@ -36,7 +36,7 @@ for epoch in range(n_epochs):
         optimizer.zero_grad()
         idx = order[i:i+batch_size]
         
-        # Данные грузим на GPU
+        # Данные передаем на GPU
         X_batch = Tensor(X_train[idx], device='gpu')
         y_batch = Tensor(y_train[idx], device='gpu')
         
@@ -48,7 +48,7 @@ for epoch in range(n_epochs):
         epoch_loss += float(loss.data)
         correct += (preds.data.argmax(axis=1) == y_batch.data).sum()
         
-    print(f"Epoch {epoch+1:2} | Loss: {epoch_loss/(n_samples/batch_size):.4f} | Acc: {float(correct)/n_samples:.2%}")
+    print(f"Epoch {epoch+1} | Loss: {epoch_loss/(n_samples/batch_size):.4f} | Acc: {float(correct)/n_samples:.2%}")
 
-# Вывод работы ядер
+# Вывод отчета по тензорным ядрам
 profiler.report()
