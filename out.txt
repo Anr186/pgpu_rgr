@@ -1,30 +1,24 @@
 (myenv) anr1@u24:~/Desktop/PGPU/rgr$ python main.py
 Загрузка MNIST...
-Размер обучающей выборки: 60000, размер тестовой: 10000
-Форма данных: (10000, 1, 28, 28)
-✅ Модель перенесена на GPU
-Количество параметров: 61706
 
-Начинаем обучение...
-----------------------------------------------------------------------
- Epoch | Train Loss | Train Acc |  Test Acc |  Test Loss
-----------------------------------------------------------------------
+Начинаем обучение (Гибридный режим: индексация на CPU, умножение на GPU)...
+------------------------------------------------------------
 Traceback (most recent call last):
-  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 99, in <module>
-    preds = lenet5(X_batch)
-            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework.py", line 243, in __call__
+  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 43, in <module>
+    preds = model(X_batch)
+            ^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myframework.py", line 205, in __call__
     for l in self.layers: x = l(x)
                               ^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework.py", line 191, in __call__
-    col, oh, ow = self._im2col(x.data)
-                  ^^^^^^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework.py", line 180, in _im2col
-    x_pad[:, :, p:p+h, p:p+w] = x
-    ~~~~~^^^^^^^^^^^^^^^^^^^^
-  File "cupy/_core/core.pyx", line 1812, in cupy._core.core._ndarray_base.__setitem__
-  File "cupy/_core/_routines_indexing.pyx", line 60, in cupy._core._routines_indexing._ndarray_setitem
-  File "cupy/_core/_routines_indexing.pyx", line 1079, in cupy._core._routines_indexing._scatter_op
+  File "/home/anr1/Desktop/PGPU/rgr/myframework.py", line 150, in __call__
+    res = self.weight.data.reshape(self.out_channels, -1) @ col 
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~
+  File "cupy/_core/core.pyx", line 1513, in cupy._core.core._ndarray_base.__matmul__
+  File "cupy/_core/_routines_linalg.pyx", line 858, in cupy._core._routines_linalg.matmul
+  File "cupy/_core/_routines_linalg.pyx", line 538, in cupy._core._routines_linalg.dot
+  File "cupy/_core/_routines_linalg.pyx", line 581, in cupy._core._routines_linalg.tensordot_core
+  File "cupy/_core/core.pyx", line 792, in cupy._core.core._ndarray_base.astype
+  File "cupy/_core/core.pyx", line 761, in cupy._core.core._ndarray_base._astype
   File "cupy/_core/_kernel.pyx", line 1380, in cupy._core._kernel.ufunc.__call__
   File "cupy/_core/_kernel.pyx", line 1407, in cupy._core._kernel.ufunc._get_ufunc_kernel
   File "cupy/_core/_kernel.pyx", line 1077, in cupy._core._kernel._get_ufunc_kernel
@@ -34,7 +28,7 @@ Traceback (most recent call last):
   File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 566, in _compile_module_with_cache
     return _compile_with_cache_cuda(
            ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 715, in _compile_with_cache_cuda
+  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 651, in _compile_with_cache_cuda
     mod.load(cubin)
   File "cupy/cuda/function.pyx", line 187, in cupy.cuda.function.Module.load
   File "cupy/cuda/function.pyx", line 189, in cupy.cuda.function.Module.load
