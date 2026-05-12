@@ -1,0 +1,79 @@
+(myenv) anr1@u24:~/Desktop/PGPU/rgr$ python main.py
+✅ CUDA/CuPy доступны - GPU активирован
+============================================================
+🔍 ИНФОРМАЦИЯ О СИСТЕМЕ
+============================================================
+name: NVIDIA GeForce RTX 4050 Laptop GPU
+compute_capability: 8.9
+total_memory: 5.8 GB
+multiprocessors: 20
+tensor_cores: Доступны
+tensor_core_type: Ampere (3rd gen)
+
+============================================================
+📊 БЕНЧМАРК ТЕНЗОРНЫХ ЯДЕР
+============================================================
+Умножение матриц 1024x1024:
+  CPU: 5.40 мс
+  GPU (тензорные ядра): 45.49 мс
+  Ускорение: 0.1x
+
+============================================================
+📥 ЗАГРУЗКА MNIST
+============================================================
+Размер обучающей выборки: 60000, размер тестовой: 10000
+Форма данных: (10000, 1, 28, 28)
+
+============================================================
+🚀 ИНИЦИАЛИЗАЦИЯ МОДЕЛИ
+============================================================
+✓ Перемещение модели на GPU...
+Количество параметров: 59134
+
+============================================================
+🎯 НАЧАЛО ОБУЧЕНИЯ
+============================================================
+ Epoch | Train Loss | Train Acc |  Test Acc |  Test Loss |  Время (с)
+--------------------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 533, in <module>
+    preds = lenet5(X_batch)
+            ^^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
+    return self.forward(x)
+           ^^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1131, in forward
+    x = layer(x)
+        ^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
+    return self.forward(x)
+           ^^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 969, in forward
+    self.col, self.out_h, self.out_w = self._im2col(data)
+                                       ^^^^^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 910, in _im2col
+    patch = x_pad[:, :, y_start:y_start+1, x_start:x_start+1].flatten()
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "cupy/_core/core.pyx", line 988, in cupy._core.core._ndarray_base.flatten
+  File "cupy/_core/core.pyx", line 1007, in cupy._core.core._ndarray_base.flatten
+  File "cupy/_core/_routines_manipulation.pyx", line 130, in cupy._core._routines_manipulation._ndarray_flatten
+  File "cupy/_core/_routines_manipulation.pyx", line 139, in cupy._core._routines_manipulation._ndarray_flatten_order_c
+  File "cupy/_core/core.pyx", line 822, in cupy._core.core._ndarray_base.copy
+  File "cupy/_core/core.pyx", line 792, in cupy._core.core._ndarray_base.astype
+  File "cupy/_core/core.pyx", line 761, in cupy._core.core._ndarray_base._astype
+  File "cupy/_core/_kernel.pyx", line 1380, in cupy._core._kernel.ufunc.__call__
+  File "cupy/_core/_kernel.pyx", line 1407, in cupy._core._kernel.ufunc._get_ufunc_kernel
+  File "cupy/_core/_kernel.pyx", line 1077, in cupy._core._kernel._get_ufunc_kernel
+  File "cupy/_core/_kernel.pyx", line 103, in cupy._core._kernel._get_simple_elementwise_kernel
+  File "cupy/_core/_kernel.pyx", line 91, in cupy._core._kernel._get_simple_elementwise_kernel_from_code
+  File "cupy/_core/core.pyx", line 2552, in cupy._core.core.compile_with_cache
+  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 566, in _compile_module_with_cache
+    return _compile_with_cache_cuda(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 715, in _compile_with_cache_cuda
+    mod.load(cubin)
+  File "cupy/cuda/function.pyx", line 187, in cupy.cuda.function.Module.load
+  File "cupy/cuda/function.pyx", line 189, in cupy.cuda.function.Module.load
+  File "cupy_backends/cuda/api/driver.pyx", line 226, in cupy_backends.cuda.api.driver.moduleLoadData
+  File "cupy_backends/cuda/api/driver.pyx", line 63, in cupy_backends.cuda.api.driver.check_status
+cupy_backends.cuda.api.driver.CUDADriverError: CUDA_ERROR_INVALID_IMAGE: device kernel image is invalid
