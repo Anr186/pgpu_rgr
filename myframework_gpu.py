@@ -907,7 +907,8 @@ class Conv2d(Module):
                     for j in range(out_w):
                         y_start = ky + i * stride
                         x_start = kx + j * stride
-                        patch = x_pad[:, :, y_start:y_start+1, x_start:x_start+1].flatten()
+                        # В файле myframework_gpu.py, метод _im2col
+                        patch = x_pad[:, :, y_start:y_start+1, x_start:x_start+1].reshape(-1)
                         col[:, col_idx] = patch
                         col_idx += 1
                         
