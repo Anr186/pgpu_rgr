@@ -1,5 +1,6 @@
 """
-MyFramework - простой фреймворк для глубокого обучения с поддержкой GPU и Tensor Cores
+MyFramework - простой фреймворк для глубокого обучения
+Аналог PyTorch для educational целей с поддержкой GPU и Tensor Cores
 """
 
 import numpy as np
@@ -23,29 +24,30 @@ class Profiler:
     def start(self, name):
         if not self.enabled: return
         if HAS_GPU:
-            cp.cuda.Device().synchronize()
+            try: cp.cuda.Device().synchronize()
+            except: pass
         self.stats[name] = self.stats.get(name, 0) - time.perf_counter()
 
     def stop(self, name):
         if not self.enabled: return
         if HAS_GPU:
-            cp.cuda.Device().synchronize()
+            try: cp.cuda.Device().synchronize()
+            except: pass
         self.stats[name] += time.perf_counter()
 
     def report(self):
-        print("\n" + "="*30)
-        print("📊 ОТЧЕТ ПРОФИЛИРОВЩИКА (GPU/CPU)")
-        print("="*30)
+        print("\n" + "="*40)
+        print("📊 ОТЧЕТ ПРОФИЛИРОВЩИКА")
+        print("="*40)
         for name, duration in sorted(self.stats.items(), key=lambda x: x[1], reverse=True):
-            print(f"{name:20} | {duration:.4f} сек")
-        print("="*30)
+            print(f"{name:25} | {duration:.4f} сек")
+        print("="*40)
 
 profiler = Profiler()
 
 # ============ ТЕНЗОР ============
 
 class Tensor:
-    """Аналог torch.Tensor с поддержкой устройств"""
     def __init__(self, data, requires_grad=False, device='cpu'):
         if isinstance(data, (list, tuple)):
             data = np.array(data, dtype=np.float32)
@@ -60,72 +62,102 @@ class Tensor:
         self.requires_grad = requires_grad
         self.grad = None
         self._ctx = None
-    
+
     def to(self, device):
         if device == self.device: return self
         return Tensor(self.data, self.requires_grad, device=device)
 
     def backward(self, grad=None):
         if self._ctx is None: return
+        xp = cp if self.device == 'gpu' else np
+        
         if grad is None:
-            xp = cp if self.device == 'gpu' else np
             grad = xp.ones_like(self.data)
         
         op, *args = self._ctx
+        
         if op == 'add':
             a, b = args
             if a.requires_grad:
-                a.grad = (a.grad if a.grad is not None else 0) + grad
-                a.backward(grad)
-            if b.requires_grad:
-                b.grad = (b.grad if b.grad is not None else 0) + grad
-                b.backward(grad)
+                a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad
+                a.backward(a.grad)
+            if isinstance(b, Tensor) and b.requires_grad:
+                # Обработка бродкастинга для bias
+                grad_b = grad
+                while grad_b.ndim > b.data.ndim:
+                    grad_b = grad_b.sum(axis=0)
+                for i, dim in enumerate(b.data.shape):
+                    if dim == 1:
+                        grad_b = grad_b.sum(axis=i, keepdims=True)
+                b.grad = (b.grad if b.grad is not None else xp.zeros_like(b.data)) + grad_b
+                b.backward(b.grad)
+
         elif op == 'matmul':
             a, b = args
-            # Считаем градиенты через matmul (используются Tensor Cores)
             if a.requires_grad:
                 grad_a = grad @ b.data.T
-                a.grad = (a.grad if a.grad is not None else 0) + grad_a
+                a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad_a
                 a.backward(grad_a)
             if b.requires_grad:
                 grad_b = a.data.T @ grad
-                b.grad = (b.grad if b.grad is not None else 0) + grad_b
+                b.grad = (b.grad if b.grad is not None else xp.zeros_like(b.data)) + grad_b
                 b.backward(grad_b)
-        # Другие операции (tanh, reshape и т.д.) по аналогии...
+
+        elif op == 'tanh':
+            a = args[0]
+            if a.requires_grad:
+                grad_a = grad * (1 - xp.tanh(a.data)**2)
+                a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad_a
+                a.backward(grad_a)
+
+        elif op == 'reshape':
+            a, old_shape = args
+            if a.requires_grad:
+                grad_a = grad.reshape(old_shape)
+                a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad_a
+                a.backward(grad_a)
+
+        elif op == 'transpose':
+            a, axes = args
+            if a.requires_grad:
+                inv_axes = np.argsort(axes)
+                grad_a = grad.transpose(tuple(inv_axes))
+                a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad_a
+                a.backward(grad_a)
 
     def __add__(self, other):
-        return self._add(self, other)
-    
-    def __matmul__(self, other):
-        return self._matmul(self, other)
-    
-    @staticmethod
-    def _add(a, b):
-        xp = cp if a.device == 'gpu' else np
-        b_data = b.data if isinstance(b, Tensor) else b
-        out = Tensor(a.data + b_data, requires_grad=a.requires_grad, device=a.device)
-        out._ctx = ('add', a, b if isinstance(b, Tensor) else Tensor(b_data, device=a.device))
+        xp = cp if self.device == 'gpu' else np
+        other_data = other.data if isinstance(other, Tensor) else other
+        out = Tensor(self.data + other_data, requires_grad=self.requires_grad, device=self.device)
+        out._ctx = ('add', self, other)
         return out
-    
-    @staticmethod
-    def _matmul(a, b):
+
+    def __matmul__(self, other):
         profiler.start('matmul_tensor_core')
-        xp = cp if a.device == 'gpu' else np
-        # Использование cp.matmul на Ada Lovelace задействует тензорные ядра
-        res_data = a.data @ b.data
-        out = Tensor(res_data, requires_grad=a.requires_grad or b.requires_grad, device=a.device)
-        out._ctx = ('matmul', a, b)
+        res_data = self.data @ other.data
+        out = Tensor(res_data, requires_grad=self.requires_grad or other.requires_grad, device=self.device)
+        out._ctx = ('matmul', self, other)
         profiler.stop('matmul_tensor_core')
+        return out
+
+    def reshape(self, *shape):
+        old_shape = self.data.shape
+        out = Tensor(self.data.reshape(*shape), requires_grad=self.requires_grad, device=self.device)
+        out._ctx = ('reshape', self, old_shape)
+        return out
+
+    def transpose(self, *axes):
+        out = Tensor(self.data.transpose(*axes), requires_grad=self.requires_grad, device=self.device)
+        out._ctx = ('transpose', self, axes)
         return out
 
 # ============ СЛОИ ============
 
 class Linear:
-    def __init__(self, in_features, out_features):
-        # Инициализация Xavier
-        limit = np.sqrt(6 / (in_features + out_features))
-        self.weight = Tensor(np.random.uniform(-limit, limit, (in_features, out_features)), requires_grad=True)
-        self.bias = Tensor(np.zeros(out_features), requires_grad=True)
+    def __init__(self, in_f, out_f):
+        limit = np.sqrt(6 / (in_f + out_f))
+        self.weight = Tensor(np.random.uniform(-limit, limit, (in_f, out_f)), requires_grad=True)
+        self.bias = Tensor(np.zeros(out_f), requires_grad=True)
         self.device = 'cpu'
 
     def to(self, device):
@@ -138,16 +170,14 @@ class Linear:
         return x @ self.weight + self.bias
 
 class Conv2d:
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+    def __init__(self, in_c, out_c, kernel_size, stride=1, padding=0):
+        self.in_channels = in_c
+        self.out_channels = out_c
         self.kernel_size = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
-        self.stride = stride
-        self.padding = padding
-        
-        limit = np.sqrt(6 / (in_channels * np.prod(self.kernel_size) + out_channels))
-        self.weight = Tensor(np.random.uniform(-limit, limit, (out_channels, in_channels, *self.kernel_size)), requires_grad=True)
-        self.bias = Tensor(np.zeros(out_channels), requires_grad=True)
+        self.stride, self.padding = stride, padding
+        limit = np.sqrt(6 / (in_c * np.prod(self.kernel_size) + out_c))
+        self.weight = Tensor(np.random.uniform(-limit, limit, (out_c, in_c, *self.kernel_size)), requires_grad=True)
+        self.bias = Tensor(np.zeros(out_c), requires_grad=True)
         self.device = 'cpu'
 
     def to(self, device):
@@ -161,94 +191,116 @@ class Conv2d:
         n, c, h, w = x.shape
         kh, kw = self.kernel_size
         p, s = self.padding, self.stride
-        oh = (h + 2*p - kh) // s + 1
-        ow = (w + 2*p - kw) // s + 1
+        oh, ow = (h + 2*p - kh) // s + 1, (w + 2*p - kw) // s + 1
         
-        # Безопасный паддинг без вызова JIT-ядер
         if p > 0:
             x_pad = xp.zeros((n, c, h + 2*p, w + 2*p), dtype=xp.float32)
             x_pad[:, :, p:p+h, p:p+w] = x
-        else:
-            x_pad = x
+        else: x_pad = x
             
-        # Формирование колонок через срезы
         col = xp.zeros((n, c, kh, kw, oh, ow), dtype=xp.float32)
         for y in range(kh):
             for x_idx in range(kw):
                 col[:, :, y, x_idx, :, :] = x_pad[:, :, y:y+oh*s:s, x_idx:x_idx+ow*s:s]
-        
         return col.transpose(1, 2, 3, 0, 4, 5).reshape(c * kh * kw, -1), oh, ow
 
     def __call__(self, x):
-        profiler.start('conv2d_total')
-        xp = cp if self.device == 'gpu' else np
+        profiler.start('conv2d_forward')
         col, oh, ow = self._im2col(x.data)
-        
-        # Основная операция свертки -> MatMul (Tensor Cores)
-        # weight: (out_c, in_c*kh*kw), col: (in_c*kh*kw, n*oh*ow)
         w_flat = self.weight.data.reshape(self.out_channels, -1)
-        res = w_flat @ col
-        
+        # Matmul на GPU задействует Tensor Cores
+        res = w_flat @ col 
         out = res.reshape(self.out_channels, x.data.shape[0], oh, ow).transpose(1, 0, 2, 3)
-        
-        # Добавление bias
-        out = out + self.bias.data.reshape(1, -1, 1, 1)
-        
-        profiler.stop('conv2d_total')
-        return Tensor(out, requires_grad=True, device=self.device)
+        out_tensor = Tensor(out, requires_grad=True, device=self.device)
+        # Упрощенный контекст для примера (сложение с bias)
+        bias_reshaped = self.bias.data.reshape(1, -1, 1, 1)
+        final_out = out_tensor + Tensor(bias_reshaped, device=self.device)
+        profiler.stop('conv2d_forward')
+        return final_out
+
+class AvgPool2d:
+    def __init__(self, size):
+        self.size = size
+    def __call__(self, x):
+        xp = cp if x.device == 'gpu' else np
+        n, c, h, w = x.data.shape
+        s = self.size
+        out = x.data.reshape(n, c, h//s, s, w//s, s).mean(axis=(3, 5))
+        return Tensor(out, requires_grad=x.requires_grad, device=x.device)
 
 class Tanh:
     def __call__(self, x):
         xp = cp if x.device == 'gpu' else np
-        return Tensor(xp.tanh(x.data), requires_grad=x.requires_grad, device=x.device)
+        out = Tensor(xp.tanh(x.data), requires_grad=x.requires_grad, device=x.device)
+        out._ctx = ('tanh', x)
+        return out
 
 class Flatten:
     def __call__(self, x):
-        return Tensor(x.data.reshape(x.data.shape[0], -1), requires_grad=x.requires_grad, device=x.device)
+        return x.reshape(x.data.shape[0], -1)
 
 class Sequential:
     def __init__(self, *layers):
         self.layers = layers
     def to(self, device):
-        for layer in self.layers:
-            if hasattr(layer, 'to'): layer.to(device)
+        for l in self.layers:
+            if hasattr(l, 'to'): l.to(device)
         return self
     def __call__(self, x):
-        for layer in self.layers:
-            x = layer(x)
+        for l in self.layers: x = l(x)
         return x
     def parameters(self):
-        params = []
+        p = []
         for l in self.layers:
-            if hasattr(l, 'weight'): params.append(l.weight)
-            if hasattr(l, 'bias'): params.append(l.bias)
-        return params
+            if hasattr(l, 'weight'): p.extend([l.weight, l.bias])
+        return p
 
-# ============ ОПТИМИЗАТОР ============
+# ============ LOSS & OPTIM ============
+
+class CrossEntropyLoss:
+    def __call__(self, preds, targets):
+        xp = cp if preds.device == 'gpu' else np
+        n = preds.data.shape[0]
+        # Softmax
+        exps = xp.exp(preds.data - xp.max(preds.data, axis=1, keepdims=True))
+        probs = exps / xp.sum(exps, axis=1, keepdims=True)
+        # Loss
+        log_p = -xp.log(probs[xp.arange(n), targets.data.astype(int)])
+        loss = xp.mean(log_p)
+        # Ручной расчет градиента для последнего слоя
+        if preds.requires_grad:
+            grad = probs.copy()
+            grad[xp.arange(n), targets.data.astype(int)] -= 1
+            preds.grad = grad / n
+        return loss
 
 class Adam:
     def __init__(self, parameters, lr=0.001):
-        self.params = parameters
+        self.params = list(parameters)
         self.lr = lr
-        self.m = [0] * len(parameters)
-        self.v = [0] * len(parameters)
+        self.m = [None] * len(self.params)
+        self.v = [None] * len(self.params)
         self.t = 0
+
+    def zero_grad(self):
+        for p in self.params: p.grad = None
 
     def step(self):
         self.t += 1
         for i, p in enumerate(self.params):
             if p.grad is None: continue
             xp = cp if p.device == 'gpu' else np
-            if isinstance(self.m[i], int):
+            if self.m[i] is None:
                 self.m[i] = xp.zeros_like(p.data)
                 self.v[i] = xp.zeros_like(p.data)
-            
             self.m[i] = 0.9 * self.m[i] + 0.1 * p.grad
             self.v[i] = 0.999 * self.v[i] + 0.001 * (p.grad**2)
             m_hat = self.m[i] / (1 - 0.9**self.t)
             v_hat = self.v[i] / (1 - 0.999**self.t)
             p.data -= self.lr * m_hat / (xp.sqrt(v_hat) + 1e-8)
 
-    def zero_grad(self):
-        for p in self.params:
-            p.grad = None
+def no_grad():
+    class NoGradContext:
+        def __enter__(self): pass
+        def __exit__(self, exc_type, exc_val, exc_tb): pass
+    return NoGradContext()
