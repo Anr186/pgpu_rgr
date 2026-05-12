@@ -1,40 +1,3 @@
-(myenv) anr1@u24:~/Desktop/PGPU/rgr$ python main.py
-✅ CUDA/CuPy доступны - GPU активирован
-============================================================
-🔍 ИНФОРМАЦИЯ О СИСТЕМЕ
-============================================================
-name: NVIDIA GeForce RTX 4050 Laptop GPU
-compute_capability: 8.9
-total_memory: 5.8 GB
-multiprocessors: 20
-tensor_cores: Доступны
-tensor_core_type: Ampere (3rd gen)
-
-============================================================
-📊 БЕНЧМАРК ТЕНЗОРНЫХ ЯДЕР
-============================================================
-Умножение матриц 1024x1024:
-  CPU: 9.14 мс
-  GPU (тензорные ядра): 46.16 мс
-  Ускорение: 0.2x
-
-============================================================
-📥 ЗАГРУЗКА MNIST
-============================================================
-Размер обучающей выборки: 60000, размер тестовой: 10000
-Форма данных: (10000, 1, 28, 28)
-
-============================================================
-🚀 ИНИЦИАЛИЗАЦИЯ МОДЕЛИ
-============================================================
-✓ Перемещение модели на GPU...
-Количество параметров: 59134
-
-============================================================
-🎯 НАЧАЛО ОБУЧЕНИЯ
-============================================================
- Epoch | Train Loss | Train Acc |  Test Acc |  Test Loss |  Время (с)
---------------------------------------------------------------------------------
 Traceback (most recent call last):
   File "/home/anr1/Desktop/PGPU/rgr/main.py", line 533, in <module>
     preds = lenet5(X_batch)
@@ -42,18 +5,24 @@ Traceback (most recent call last):
   File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
     return self.forward(x)
            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1112, in forward
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1118, in forward
     x = layer(x)
         ^^^^^^^^
   File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
     return self.forward(x)
            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 950, in forward
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 956, in forward
     self.col, self.out_h, self.out_w = self._im2col(data)
                                        ^^^^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 903, in _im2col
-    col[:, :, y, x_idx, :, :] = x_pad[
-    ~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 890, in _im2col
+    x_pad = xp.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant')
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/_padding/pad.py", line 660, in pad
+    return _pad_simple(array, pad_width, 0)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/_padding/pad.py", line 83, in _pad_simple
+    padded[original_area_slice] = array
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^
   File "cupy/_core/core.pyx", line 1812, in cupy._core.core._ndarray_base.__setitem__
   File "cupy/_core/_routines_indexing.pyx", line 60, in cupy._core._routines_indexing._ndarray_setitem
   File "cupy/_core/_routines_indexing.pyx", line 1079, in cupy._core._routines_indexing._scatter_op
