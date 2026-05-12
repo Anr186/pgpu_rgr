@@ -14,9 +14,9 @@ tensor_core_type: Ampere (3rd gen)
 📊 БЕНЧМАРК ТЕНЗОРНЫХ ЯДЕР
 ============================================================
 Умножение матриц 1024x1024:
-  CPU: 4.92 мс
-  GPU (тензорные ядра): 48.26 мс
-  Ускорение: 0.1x
+  CPU: 12.35 мс
+  GPU (тензорные ядра): 44.43 мс
+  Ускорение: 0.3x
 
 ============================================================
 📥 ЗАГРУЗКА MNIST
@@ -42,21 +42,15 @@ Traceback (most recent call last):
   File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
     return self.forward(x)
            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1117, in forward
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1107, in forward
     x = layer(x)
         ^^^^^^^^
   File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
     return self.forward(x)
            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 955, in forward
-    self.col, self.out_h, self.out_w = self._im2col(data)
-                                       ^^^^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 894, in _im2col
-    x_pad[:, :, pad:-pad, pad:-pad] = x
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "cupy/_core/core.pyx", line 1812, in cupy._core.core._ndarray_base.__setitem__
-  File "cupy/_core/_routines_indexing.pyx", line 60, in cupy._core._routines_indexing._ndarray_setitem
-  File "cupy/_core/_routines_indexing.pyx", line 1079, in cupy._core._routines_indexing._scatter_op
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 952, in forward
+    out += self.b.data[cp.newaxis, :, cp.newaxis, cp.newaxis]
+  File "cupy/_core/core.pyx", line 1611, in cupy._core.core._ndarray_base.__iadd__
   File "cupy/_core/_kernel.pyx", line 1380, in cupy._core._kernel.ufunc.__call__
   File "cupy/_core/_kernel.pyx", line 1407, in cupy._core._kernel.ufunc._get_ufunc_kernel
   File "cupy/_core/_kernel.pyx", line 1077, in cupy._core._kernel._get_ufunc_kernel
