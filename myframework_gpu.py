@@ -886,35 +886,33 @@ class Conv2d(Module):
         out_h = (h + 2*pad - kh) // stride + 1
         out_w = (w + 2*pad - kw) // stride + 1
         
-        # Делаем паддинг. Если на GPU снова упадет - раскомментируйте блок с CPU ниже
-        x_pad = xp.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant')
-        
-        # Используем "трюк со страйдами" (libstrides)
-        # Это создает виртуальное представление патчей без циклов и лишней компиляции
-        s_n, s_c, s_h, s_w = x_pad.strides
-        
-        # Новая форма: (n, c, out_h, out_w, kh, kw)
-        new_shape = (n, c, out_h, out_w, kh, kw)
-        new_strides = (s_n, s_c, s_h * stride, s_w * stride, s_h, s_w)
-        
-        # Создаем представление
-        if is_gpu:
-            col = cp.lib.stride_tricks.as_strided(x_pad, shape=new_shape, strides=new_strides)
+        # --- БЕЗОПАСНЫЙ ПАДДИНГ БЕЗ xp.pad ---
+        # Создаем пустой массив нужного размера и вставляем в него оригинал
+        # Это заменяет xp.pad, который у вас вызывает ошибку
+        x_pad = xp.zeros((n, c, h + 2*pad, w + 2*pad), dtype=xp.float32)
+        if pad > 0:
+            x_pad[:, :, pad:-pad, pad:-pad] = x
         else:
-            col = np.lib.stride_tricks.as_strided(x_pad, shape=new_shape, strides=new_strides)
+            x_pad = x
             
-        # Транспонируем и копируем (копирование здесь стабильное)
-        # Нам нужен формат (c * kh * kw, n * out_h * out_w)
-        res = col.transpose(1, 4, 5, 0, 2, 3).reshape(c * kh * kw, -1)
+        # --- МАКСИМАЛЬНО СОВМЕСТИМЫЙ IM2COL ---
+        # Используем выделение памяти и простые циклы копирования срезов
+        col = xp.zeros((c, kh, kw, n, out_h, out_w), dtype=xp.float32)
         
-        # ВАЖНО: делаем явную копию, чтобы разорвать связь со страйдами
-        res = xp.array(res, copy=True)
+        for y in range(kh):
+            y_max = y + stride * out_h
+            for x_idx in range(kw):
+                x_max = x_idx + stride * out_w
+                # Прямое присваивание срезов обычно не требует сложной JIT-компиляции
+                col[:, y, x_idx, :, :, :] = x_pad[:, :, y:y_max:stride, x_idx:x_max:stride].transpose(1, 0, 2, 3)
+        
+        # Решейп в финальную матрицу (C*kh*kw, N*out_h*out_w)
+        res = col.reshape(c * kh * kw, -1)
         
         profiler.stop()
         return res, out_h, out_w
 
     def _col2im(self, dcol, x_shape, out_h, out_w):
-        # Для col2im используем упрощенный цикл, так как он редко вызывает ошибку образа
         profiler.start('col2im')
         is_gpu = HAS_GPU and isinstance(dcol, cp.ndarray)
         xp = cp if is_gpu else np
@@ -924,20 +922,21 @@ class Conv2d(Module):
         pad = self.padding
         stride = self.stride
         
-        dcol_res = dcol.reshape(c, kh, kw, n, out_h, out_w).transpose(3, 0, 1, 2, 4, 5)
+        # Обратная трансформация
+        dcol_res = dcol.reshape(c, kh, kw, n, out_h, out_w)
         x_pad = xp.zeros((n, c, h + 2*pad, w + 2*pad), dtype=xp.float32)
         
         for y in range(kh):
             y_max = y + stride * out_h
-            for x in range(kw):
-                x_max = x + stride * out_w
-                # Используем += через метод, чтобы избежать сложной компиляции индексации
-                xp.add(x_pad[:, :, y:y_max:stride, x:x_max:stride], 
-                       dcol_res[:, :, y, x, :, :], 
-                       out=x_pad[:, :, y:y_max:stride, x:x_max:stride])
+            for x_idx in range(kw):
+                x_max = x_idx + stride * out_w
+                # Используем промежуточный массив для безопасности
+                patch = dcol_res[:, y, x_idx, :, :, :].transpose(1, 0, 2, 3)
+                x_pad[:, :, y:y_max:stride, x_idx:x_max:stride] += patch
         
         profiler.stop()
-        if pad == 0: return x_pad
+        if pad == 0:
+            return x_pad
         return x_pad[:, :, pad:-pad, pad:-pad]
     
     def forward(self, x):
