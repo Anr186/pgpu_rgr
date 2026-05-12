@@ -877,8 +877,6 @@ class Conv2d(Module):
         profiler.start('im2col')
         
         is_gpu = HAS_GPU and isinstance(x, cp.ndarray)
-        xp = cp if is_gpu else np
-        
         n, c, h, w = x.shape
         kh, kw = self.kernel_size
         pad = self.padding
@@ -887,22 +885,28 @@ class Conv2d(Module):
         out_h = (h + 2*pad - kh) // stride + 1
         out_w = (w + 2*pad - kw) // stride + 1
         
-        # 1. Паддинг
-        pad_width = ((0, 0), (0, 0), (pad, pad), (pad, pad))
-        x_pad = xp.pad(x, pad_width, mode='constant')
+        # Решение проблемы CUDA_ERROR_INVALID_IMAGE:
+        # Делаем паддинг на CPU, чтобы избежать сбойного ядра CuPy для .pad()
+        x_cpu = cp.asnumpy(x) if is_gpu else x
+        x_pad_cpu = np.pad(x_cpu, ((0,0), (0,0), (pad,pad), (pad,pad)), mode='constant')
         
-        # 2. Формируем 6D тензор для эффективного извлечения патчей
-        # (N, C, kh, kw, out_h, out_w)
+        # Переносим обратно на GPU
+        x_pad = cp.asarray(x_pad_cpu) if is_gpu else x_pad_cpu
+        xp = cp if is_gpu else np
+        
+        # Создаем матрицу col через базовое выделение памяти
         col = xp.zeros((n, c, kh, kw, out_h, out_w), dtype=xp.float32)
         
+        # Заполняем через простые срезы (они обычно не вызывают ошибку ядра)
         for y in range(kh):
-            y_max = y + stride * out_h
-            for x in range(kw):
-                x_max = x + stride * out_w
-                col[:, :, y, x, :, :] = x_pad[:, :, y:y_max:stride, x:x_max:stride]
+            for x_idx in range(kw):
+                col[:, :, y, x_idx, :, :] = x_pad[
+                    :, :, 
+                    y : y + out_h * stride : stride, 
+                    x_idx : x_idx + out_w * stride : stride
+                ]
         
-        # 3. Транспонируем и решейпим в (C*kh*kw, N*out_h*out_w)
-        # Это стандартный формат, который ожидает forward
+        # Финальный решейп
         col = col.transpose(1, 2, 3, 0, 4, 5).reshape(c * kh * kw, -1)
         
         profiler.stop()
@@ -913,24 +917,17 @@ class Conv2d(Module):
         
         is_gpu = HAS_GPU and isinstance(dcol, cp.ndarray)
         xp = cp if is_gpu else np
-        
         n, c, h, w = x_shape
         kh, kw = self.kernel_size
         pad = self.padding
         stride = self.stride
         
-        # Обратный решейп: (C, kh, kw, N, out_h, out_w)
-        dcol = dcol.reshape(c, kh, kw, n, out_h, out_w)
-        # Транспонируем обратно в (N, C, kh, kw, out_h, out_w)
-        dcol = dcol.transpose(3, 0, 1, 2, 4, 5)
-        
+        dcol = dcol.reshape(c, kh, kw, n, out_h, out_w).transpose(3, 0, 1, 2, 4, 5)
         x_pad = xp.zeros((n, c, h + 2*pad, w + 2*pad), dtype=xp.float32)
         
         for y in range(kh):
-            y_max = y + stride * out_h
-            for x in range(kw):
-                x_max = x + stride * out_w
-                x_pad[:, :, y:y_max:stride, x:x_max:stride] += dcol[:, :, y, x, :, :]
+            for x_idx in range(kw):
+                x_pad[:, :, y:y+out_h*stride:stride, x_idx:x_idx+out_w*stride:stride] += dcol[:, :, y, x_idx, :, :]
         
         profiler.stop()
         if pad == 0:
