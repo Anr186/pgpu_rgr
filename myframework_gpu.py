@@ -877,6 +877,8 @@ class Conv2d(Module):
         profiler.start('im2col')
         
         is_gpu = HAS_GPU and isinstance(x, cp.ndarray)
+        xp = cp if is_gpu else np
+        
         n, c, h, w = x.shape
         kh, kw = self.kernel_size
         pad = self.padding
@@ -885,74 +887,55 @@ class Conv2d(Module):
         out_h = (h + 2*pad - kh) // stride + 1
         out_w = (w + 2*pad - kw) // stride + 1
         
-        # === ГАРАНТИРОВАННЫЙ ОБХОД ОШИБКИ CUDA JIT ===
-        # Вычисляем паддинг на CPU через NumPy, затем переносим на GPU.
-        # Это полностью исключает сломанный JIT-компилятор CuPy для данной операции.
+        # 1. Паддинг
         pad_width = ((0, 0), (0, 0), (pad, pad), (pad, pad))
-        if is_gpu:
-            x_cpu = cp.asnumpy(x)
-            x_pad = cp.asarray(np.pad(x_cpu, pad_width, mode='constant', constant_values=0))
-        else:
-            x_pad = np.pad(x, pad_width, mode='constant', constant_values=0)
-        # ==================================================
+        x_pad = xp.pad(x, pad_width, mode='constant')
         
-        # Оставшаяся часть im2col (без изменений)
-        col_shape = (c * kh * kw, n * out_h * out_w)
-        col = cp.zeros(col_shape, dtype=cp.float32) if is_gpu else np.zeros(col_shape, dtype=np.float32)
+        # 2. Формируем 6D тензор для эффективного извлечения патчей
+        # (N, C, kh, kw, out_h, out_w)
+        col = xp.zeros((n, c, kh, kw, out_h, out_w), dtype=xp.float32)
         
-        col_idx = 0
-        for ky in range(kh):
-            for kx in range(kw):
-                for i in range(out_h):
-                    for j in range(out_w):
-                        y_start = ky + i * stride
-                        x_start = kx + j * stride
-                        # В файле myframework_gpu.py, метод _im2col
-                        patch = x_pad[:, :, y_start:y_start+1, x_start:x_start+1].reshape(-1)
-                        col[:, col_idx] = patch
-                        col_idx += 1
-                        
+        for y in range(kh):
+            y_max = y + stride * out_h
+            for x in range(kw):
+                x_max = x + stride * out_w
+                col[:, :, y, x, :, :] = x_pad[:, :, y:y_max:stride, x:x_max:stride]
+        
+        # 3. Транспонируем и решейпим в (C*kh*kw, N*out_h*out_w)
+        # Это стандартный формат, который ожидает forward
+        col = col.transpose(1, 2, 3, 0, 4, 5).reshape(c * kh * kw, -1)
+        
         profiler.stop()
         return col, out_h, out_w
-    
+
     def _col2im(self, dcol, x_shape, out_h, out_w):
-        """col2im с поддержкой GPU - упрощённая версия"""
         profiler.start('col2im')
         
         is_gpu = HAS_GPU and isinstance(dcol, cp.ndarray)
+        xp = cp if is_gpu else np
+        
         n, c, h, w = x_shape
         kh, kw = self.kernel_size
         pad = self.padding
         stride = self.stride
         
-        if is_gpu:
-            x_pad = cp.zeros((n, c, h + 2*pad, w + 2*pad), dtype=cp.float32)
-        else:
-            x_pad = np.zeros((n, c, h + 2*pad, w + 2*pad), dtype=np.float32)
+        # Обратный решейп: (C, kh, kw, N, out_h, out_w)
+        dcol = dcol.reshape(c, kh, kw, n, out_h, out_w)
+        # Транспонируем обратно в (N, C, kh, kw, out_h, out_w)
+        dcol = dcol.transpose(3, 0, 1, 2, 4, 5)
         
-        col_idx = 0
-        for ky in range(kh):
-            for kx in range(kw):
-                for i in range(out_h):
-                    for j in range(out_w):
-                        y_start = ky + i * stride
-                        x_start = kx + j * stride
-                        
-                        if is_gpu:
-                            val = dcol[:, col_idx].reshape(n, c, 1, 1)
-                            x_pad[:, :, y_start:y_start+1, x_start:x_start+1] += val
-                        else:
-                            val = dcol[:, col_idx].reshape(n, c, 1, 1)
-                            x_pad[:, :, y_start:y_start+1, x_start:x_start+1] += val
-                        col_idx += 1
+        x_pad = xp.zeros((n, c, h + 2*pad, w + 2*pad), dtype=xp.float32)
         
-        if pad == 0:
-            result = x_pad
-        else:
-            result = x_pad[:, :, pad:-pad, pad:-pad]
+        for y in range(kh):
+            y_max = y + stride * out_h
+            for x in range(kw):
+                x_max = x + stride * out_w
+                x_pad[:, :, y:y_max:stride, x:x_max:stride] += dcol[:, :, y, x, :, :]
         
         profiler.stop()
-        return result
+        if pad == 0:
+            return x_pad
+        return x_pad[:, :, pad:-pad, pad:-pad]
     
     def forward(self, x):
         profiler.start('conv_forward')
