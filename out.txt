@@ -4,12 +4,15 @@
 📸 Пример цифры сохранён как 'sample_image.png'
 Метка первого примера: 5
 Форма данных: (10000, 1, 28, 28)
+Модель LeNet5 создана
+Количество параметров: 61706
+
+Начинаем обучение...
+----------------------------------------------------------------------
+ Epoch | Train Loss | Train Acc |  Test Acc |  Test Loss
+----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 73, in <module>
-    lenet5 = LeNet5()
-             ^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 58, in __init__
-    AvgPool2d(kernel_size=2, stride=2),
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: AvgPool2d.__init__() got an unexpected keyword argument 'stride'
+  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 116, in <module>
+    epoch_loss += loss.data.item() if hasattr(loss.data, 'item') else loss.data
+TypeError: unsupported operand type(s) for +=: 'int' and 'memoryview'
 (myenv) anr1@u24:~/Desktop/PGPU/rgr$ 
