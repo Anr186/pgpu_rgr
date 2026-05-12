@@ -36,12 +36,14 @@ class Profiler:
         self.stats[name] += time.perf_counter()
 
     def report(self):
-        print("\n" + "="*40)
-        print("📊 ОТЧЕТ ПРОФИЛИРОВЩИКА")
-        print("="*40)
+        print("\n" + "="*45)
+        print("📊 ОТЧЕТ ПРОФИЛИРОВЩИКА (ВРЕМЯ НА УСТРОЙСТВЕ)")
+        print("="*45)
+        if not self.stats:
+            print("Данные не собраны. Вызывайте profiler.start/stop в коде.")
         for name, duration in sorted(self.stats.items(), key=lambda x: x[1], reverse=True):
             print(f"{name:25} | {duration:.4f} сек")
-        print("="*40)
+        print("="*45)
 
 profiler = Profiler()
 
@@ -74,6 +76,8 @@ class Tensor:
         if grad is None:
             grad = xp.ones_like(self.data)
         
+        if isinstance(grad, Tensor): grad = grad.data
+
         op, *args = self._ctx
         
         if op == 'add':
@@ -82,7 +86,6 @@ class Tensor:
                 a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad
                 a.backward(a.grad)
             if isinstance(b, Tensor) and b.requires_grad:
-                # Обработка бродкастинга для bias
                 grad_b = grad
                 while grad_b.ndim > b.data.ndim:
                     grad_b = grad_b.sum(axis=0)
@@ -117,19 +120,11 @@ class Tensor:
                 a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad_a
                 a.backward(grad_a)
 
-        elif op == 'transpose':
-            a, axes = args
-            if a.requires_grad:
-                inv_axes = np.argsort(axes)
-                grad_a = grad.transpose(tuple(inv_axes))
-                a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad_a
-                a.backward(grad_a)
-
     def __add__(self, other):
         xp = cp if self.device == 'gpu' else np
-        other_data = other.data if isinstance(other, Tensor) else other
-        out = Tensor(self.data + other_data, requires_grad=self.requires_grad, device=self.device)
-        out._ctx = ('add', self, other)
+        other_t = other if isinstance(other, Tensor) else Tensor(other, device=self.device)
+        out = Tensor(self.data + other_t.data, requires_grad=self.requires_grad or other_t.requires_grad, device=self.device)
+        out._ctx = ('add', self, other_t)
         return out
 
     def __matmul__(self, other):
@@ -146,18 +141,13 @@ class Tensor:
         out._ctx = ('reshape', self, old_shape)
         return out
 
-    def transpose(self, *axes):
-        out = Tensor(self.data.transpose(*axes), requires_grad=self.requires_grad, device=self.device)
-        out._ctx = ('transpose', self, axes)
-        return out
-
 # ============ СЛОИ ============
 
 class Linear:
-    def __init__(self, in_f, out_f):
-        limit = np.sqrt(6 / (in_f + out_f))
-        self.weight = Tensor(np.random.uniform(-limit, limit, (in_f, out_f)), requires_grad=True)
-        self.bias = Tensor(np.zeros(out_f), requires_grad=True)
+    def __init__(self, in_features, out_features):
+        limit = np.sqrt(6 / (in_features + out_features))
+        self.weight = Tensor(np.random.uniform(-limit, limit, (in_features, out_features)), requires_grad=True)
+        self.bias = Tensor(np.zeros(out_features), requires_grad=True)
         self.device = 'cpu'
 
     def to(self, device):
@@ -170,14 +160,15 @@ class Linear:
         return x @ self.weight + self.bias
 
 class Conv2d:
-    def __init__(self, in_c, out_c, kernel_size, stride=1, padding=0):
-        self.in_channels = in_c
-        self.out_channels = out_c
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.kernel_size = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
         self.stride, self.padding = stride, padding
-        limit = np.sqrt(6 / (in_c * np.prod(self.kernel_size) + out_c))
-        self.weight = Tensor(np.random.uniform(-limit, limit, (out_c, in_c, *self.kernel_size)), requires_grad=True)
-        self.bias = Tensor(np.zeros(out_c), requires_grad=True)
+        
+        limit = np.sqrt(6 / (in_channels * np.prod(self.kernel_size) + out_channels))
+        self.weight = Tensor(np.random.uniform(-limit, limit, (out_channels, in_channels, *self.kernel_size)), requires_grad=True)
+        self.bias = Tensor(np.zeros(out_channels), requires_grad=True)
         self.device = 'cpu'
 
     def to(self, device):
@@ -208,23 +199,22 @@ class Conv2d:
         profiler.start('conv2d_forward')
         col, oh, ow = self._im2col(x.data)
         w_flat = self.weight.data.reshape(self.out_channels, -1)
-        # Matmul на GPU задействует Tensor Cores
         res = w_flat @ col 
         out = res.reshape(self.out_channels, x.data.shape[0], oh, ow).transpose(1, 0, 2, 3)
-        out_tensor = Tensor(out, requires_grad=True, device=self.device)
-        # Упрощенный контекст для примера (сложение с bias)
-        bias_reshaped = self.bias.data.reshape(1, -1, 1, 1)
-        final_out = out_tensor + Tensor(bias_reshaped, device=self.device)
+        
+        out_t = Tensor(out, requires_grad=True, device=self.device)
+        bias_t = Tensor(self.bias.data.reshape(1, -1, 1, 1), device=self.device)
+        final_out = out_t + bias_t
         profiler.stop('conv2d_forward')
         return final_out
 
 class AvgPool2d:
-    def __init__(self, size):
-        self.size = size
+    def __init__(self, kernel_size):
+        self.kernel_size = kernel_size
     def __call__(self, x):
         xp = cp if x.device == 'gpu' else np
         n, c, h, w = x.data.shape
-        s = self.size
+        s = self.kernel_size
         out = x.data.reshape(n, c, h//s, s, w//s, s).mean(axis=(3, 5))
         return Tensor(out, requires_grad=x.requires_grad, device=x.device)
 
@@ -261,23 +251,26 @@ class CrossEntropyLoss:
     def __call__(self, preds, targets):
         xp = cp if preds.device == 'gpu' else np
         n = preds.data.shape[0]
-        # Softmax
-        exps = xp.exp(preds.data - xp.max(preds.data, axis=1, keepdims=True))
+        # Стабильный Softmax
+        logits = preds.data
+        exps = xp.exp(logits - xp.max(logits, axis=1, keepdims=True))
         probs = exps / xp.sum(exps, axis=1, keepdims=True)
+        
         # Loss
-        log_p = -xp.log(probs[xp.arange(n), targets.data.astype(int)])
+        t_idx = targets.data.astype(int)
+        log_p = -xp.log(probs[xp.arange(n), t_idx] + 1e-10)
         loss = xp.mean(log_p)
-        # Ручной расчет градиента для последнего слоя
+        
         if preds.requires_grad:
             grad = probs.copy()
-            grad[xp.arange(n), targets.data.astype(int)] -= 1
+            grad[xp.arange(n), t_idx] -= 1
             preds.grad = grad / n
         return loss
 
 class Adam:
-    def __init__(self, parameters, lr=0.001):
+    def __init__(self, parameters, lr=0.001, beta1=0.9, beta2=0.999, eps=1e-8):
         self.params = list(parameters)
-        self.lr = lr
+        self.lr, self.beta1, self.beta2, self.eps = lr, beta1, beta2, eps
         self.m = [None] * len(self.params)
         self.v = [None] * len(self.params)
         self.t = 0
@@ -293,14 +286,16 @@ class Adam:
             if self.m[i] is None:
                 self.m[i] = xp.zeros_like(p.data)
                 self.v[i] = xp.zeros_like(p.data)
-            self.m[i] = 0.9 * self.m[i] + 0.1 * p.grad
-            self.v[i] = 0.999 * self.v[i] + 0.001 * (p.grad**2)
-            m_hat = self.m[i] / (1 - 0.9**self.t)
-            v_hat = self.v[i] / (1 - 0.999**self.t)
-            p.data -= self.lr * m_hat / (xp.sqrt(v_hat) + 1e-8)
+            
+            # Adam алгоритм
+            self.m[i] = self.beta1 * self.m[i] + (1 - self.beta1) * p.grad
+            self.v[i] = self.beta2 * self.v[i] + (1 - self.beta2) * (p.grad**2)
+            m_hat = self.m[i] / (1 - self.beta1**self.t)
+            v_hat = self.v[i] / (1 - self.beta2**self.t)
+            p.data -= self.lr * m_hat / (xp.sqrt(v_hat) + self.eps)
 
 def no_grad():
-    class NoGradContext:
+    class NoGrad:
         def __enter__(self): pass
-        def __exit__(self, exc_type, exc_val, exc_tb): pass
-    return NoGradContext()
+        def __exit__(self, *args): pass
+    return NoGrad()
