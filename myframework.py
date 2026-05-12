@@ -259,13 +259,13 @@ class CrossEntropyLoss:
         probs = exps / xp.sum(exps, axis=1, keepdims=True)
         
         t_idx = targets.data.astype(int)
-        loss = xp.mean(-xp.log(probs[xp.arange(n), t_idx] + 1e-10))
+        loss_val = float(xp.mean(-xp.log(probs[xp.arange(n), t_idx] + 1e-10)))
         
         if preds.requires_grad:
             grad = probs.copy()
             grad[xp.arange(n), t_idx] -= 1
             preds.grad = grad / n
-        return loss
+        return Tensor(loss_val, device=preds.device)
 
 class Adam:
     def __init__(self, parameters, lr=0.001, beta1=0.9, beta2=0.999, eps=1e-8):
