@@ -8,8 +8,8 @@ Traceback (most recent call last):
   File "/home/anr1/Desktop/PGPU/rgr/main.py", line 73, in <module>
     lenet5 = LeNet5()
              ^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 56, in __init__
-    Conv2d(in_channels=1, out_channels=6, kernel_size=5, padding=2),
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: Conv2d.__init__() got an unexpected keyword argument 'in_channels'
+  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 58, in __init__
+    AvgPool2d(kernel_size=2, stride=2),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: AvgPool2d.__init__() got an unexpected keyword argument 'stride'
 (myenv) anr1@u24:~/Desktop/PGPU/rgr$ 
