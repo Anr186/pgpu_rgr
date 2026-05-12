@@ -1,8 +1,3 @@
-"""
-MyFramework - простой фреймворк для глубокого обучения
-Аналог PyTorch для educational целей с поддержкой GPU и Tensor Cores
-"""
-
 import numpy as np
 import time
 
@@ -37,10 +32,8 @@ class Profiler:
 
     def report(self):
         print("\n" + "="*45)
-        print("📊 ОТЧЕТ ПРОФИЛИРОВЩИКА (ВРЕМЯ НА УСТРОЙСТВЕ)")
+        print("📊 ОТЧЕТ ПРОФИЛИРОВЩИКА (GPU/CPU)")
         print("="*45)
-        if not self.stats:
-            print("Данные не собраны. Вызывайте profiler.start/stop в коде.")
         for name, duration in sorted(self.stats.items(), key=lambda x: x[1], reverse=True):
             print(f"{name:25} | {duration:.4f} сек")
         print("="*45)
@@ -116,12 +109,10 @@ class Tensor:
         elif op == 'reshape':
             a, old_shape = args
             if a.requires_grad:
-                grad_a = grad.reshape(old_shape)
-                a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad_a
-                a.backward(grad_a)
+                a.grad = (a.grad if a.grad is not None else xp.zeros_like(a.data)) + grad.reshape(old_shape)
+                a.backward(a.grad)
 
     def __add__(self, other):
-        xp = cp if self.device == 'gpu' else np
         other_t = other if isinstance(other, Tensor) else Tensor(other, device=self.device)
         out = Tensor(self.data + other_t.data, requires_grad=self.requires_grad or other_t.requires_grad, device=self.device)
         out._ctx = ('add', self, other_t)
@@ -209,13 +200,25 @@ class Conv2d:
         return final_out
 
 class AvgPool2d:
-    def __init__(self, kernel_size):
+    def __init__(self, kernel_size, stride=None):
         self.kernel_size = kernel_size
+        self.stride = stride if stride is not None else kernel_size
+        
     def __call__(self, x):
         xp = cp if x.device == 'gpu' else np
         n, c, h, w = x.data.shape
-        s = self.kernel_size
-        out = x.data.reshape(n, c, h//s, s, w//s, s).mean(axis=(3, 5))
+        ks, s = self.kernel_size, self.stride
+        oh, ow = (h - ks) // s + 1, (w - ks) // s + 1
+        
+        # Упрощенная реализация через reshape для пулинга без перекрытий
+        if ks == s:
+            out = x.data[:, :, :oh*s, :ow*s].reshape(n, c, oh, ks, ow, ks).mean(axis=(3, 5))
+        else:
+            # Для общего случая
+            out = xp.zeros((n, c, oh, ow), dtype=xp.float32)
+            for i in range(oh):
+                for j in range(ow):
+                    out[:,:,i,j] = x.data[:, :, i*s:i*s+ks, j*s:j*s+ks].mean(axis=(2,3))
         return Tensor(out, requires_grad=x.requires_grad, device=x.device)
 
 class Tanh:
@@ -251,15 +254,12 @@ class CrossEntropyLoss:
     def __call__(self, preds, targets):
         xp = cp if preds.device == 'gpu' else np
         n = preds.data.shape[0]
-        # Стабильный Softmax
         logits = preds.data
         exps = xp.exp(logits - xp.max(logits, axis=1, keepdims=True))
         probs = exps / xp.sum(exps, axis=1, keepdims=True)
         
-        # Loss
         t_idx = targets.data.astype(int)
-        log_p = -xp.log(probs[xp.arange(n), t_idx] + 1e-10)
-        loss = xp.mean(log_p)
+        loss = xp.mean(-xp.log(probs[xp.arange(n), t_idx] + 1e-10))
         
         if preds.requires_grad:
             grad = probs.copy()
@@ -287,7 +287,6 @@ class Adam:
                 self.m[i] = xp.zeros_like(p.data)
                 self.v[i] = xp.zeros_like(p.data)
             
-            # Adam алгоритм
             self.m[i] = self.beta1 * self.m[i] + (1 - self.beta1) * p.grad
             self.v[i] = self.beta2 * self.v[i] + (1 - self.beta2) * (p.grad**2)
             m_hat = self.m[i] / (1 - self.beta1**self.t)
