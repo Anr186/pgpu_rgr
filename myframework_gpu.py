@@ -949,7 +949,8 @@ class Conv2d(Module):
         if HAS_GPU and isinstance(self.col, cp.ndarray):
             out = cp.matmul(W_col, self.col)
             out = out.reshape(self.out_channels, n, self.out_h, self.out_w).transpose(1, 0, 2, 3)
-            out += self.b.data[cp.newaxis, :, cp.newaxis, cp.newaxis]
+            bias_reshaped = self.b.data.reshape(1, -1, 1, 1)
+            out = cp.add(out, bias_reshaped)
         else:
             out = W_col @ self.col
             out = out.reshape(self.out_channels, n, self.out_h, self.out_w).transpose(1, 0, 2, 3)
