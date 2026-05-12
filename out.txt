@@ -1,40 +1,4 @@
-myenv) anr1@u24:~/Desktop/PGPU/rgr$ python main.py
-✅ CUDA/CuPy доступны - GPU активирован
-============================================================
-🔍 ИНФОРМАЦИЯ О СИСТЕМЕ
-============================================================
-name: NVIDIA GeForce RTX 4050 Laptop GPU
-compute_capability: 8.9
-total_memory: 5.8 GB
-multiprocessors: 20
-tensor_cores: Доступны
-tensor_core_type: Ampere (3rd gen)
-
-============================================================
-📊 БЕНЧМАРК ТЕНЗОРНЫХ ЯДЕР
-============================================================
-Умножение матриц 1024x1024:
-  CPU: 12.35 мс
-  GPU (тензорные ядра): 44.43 мс
-  Ускорение: 0.3x
-
-============================================================
-📥 ЗАГРУЗКА MNIST
-============================================================
-Размер обучающей выборки: 60000, размер тестовой: 10000
-Форма данных: (10000, 1, 28, 28)
-
-============================================================
-🚀 ИНИЦИАЛИЗАЦИЯ МОДЕЛИ
-============================================================
-✓ Перемещение модели на GPU...
-Количество параметров: 59134
-
-============================================================
-🎯 НАЧАЛО ОБУЧЕНИЯ
-============================================================
- Epoch | Train Loss | Train Acc |  Test Acc |  Test Loss |  Время (с)
---------------------------------------------------------------------------------
+-----------------------------------
 Traceback (most recent call last):
   File "/home/anr1/Desktop/PGPU/rgr/main.py", line 533, in <module>
     preds = lenet5(X_batch)
@@ -42,15 +6,15 @@ Traceback (most recent call last):
   File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
     return self.forward(x)
            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1107, in forward
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1108, in forward
     x = layer(x)
         ^^^^^^^^
   File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
     return self.forward(x)
            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 952, in forward
-    out += self.b.data[cp.newaxis, :, cp.newaxis, cp.newaxis]
-  File "cupy/_core/core.pyx", line 1611, in cupy._core.core._ndarray_base.__iadd__
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 953, in forward
+    out = cp.add(out, bias_reshaped)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "cupy/_core/_kernel.pyx", line 1380, in cupy._core._kernel.ufunc.__call__
   File "cupy/_core/_kernel.pyx", line 1407, in cupy._core._kernel.ufunc._get_ufunc_kernel
   File "cupy/_core/_kernel.pyx", line 1077, in cupy._core._kernel._get_ufunc_kernel
