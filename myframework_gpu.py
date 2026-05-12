@@ -875,10 +875,14 @@ class Conv2d(Module):
     
     def _im2col(self, x):
         profiler.start('im2col')
+        # Определяем, где находятся данные
         is_gpu = HAS_GPU and isinstance(x, cp.ndarray)
-        xp = cp if is_gpu else np
         
-        n, c, h, w = x.shape
+        # ВЫНУЖДЕННЫЙ ШАГ: Переносим данные на CPU для этой операции
+        # чтобы избежать ошибки CUDA_ERROR_INVALID_IMAGE
+        x_cpu = cp.asnumpy(x) if is_gpu else x
+        
+        n, c, h, w = x_cpu.shape
         kh, kw = self.kernel_size
         pad = self.padding
         stride = self.stride
@@ -886,28 +890,22 @@ class Conv2d(Module):
         out_h = (h + 2*pad - kh) // stride + 1
         out_w = (w + 2*pad - kw) // stride + 1
         
-        # --- БЕЗОПАСНЫЙ ПАДДИНГ БЕЗ xp.pad ---
-        # Создаем пустой массив нужного размера и вставляем в него оригинал
-        # Это заменяет xp.pad, который у вас вызывает ошибку
-        x_pad = xp.zeros((n, c, h + 2*pad, w + 2*pad), dtype=xp.float32)
-        if pad > 0:
-            x_pad[:, :, pad:-pad, pad:-pad] = x
-        else:
-            x_pad = x
-            
-        # --- МАКСИМАЛЬНО СОВМЕСТИМЫЙ IM2COL ---
-        # Используем выделение памяти и простые циклы копирования срезов
-        col = xp.zeros((c, kh, kw, n, out_h, out_w), dtype=xp.float32)
+        # Делаем паддинг и im2col на CPU (используем стабильный numpy)
+        x_pad = np.pad(x_cpu, ((0,0), (0,0), (pad,pad), (pad,pad)), mode='constant')
         
-        for y in range(kh):
-            y_max = y + stride * out_h
-            for x_idx in range(kw):
-                x_max = x_idx + stride * out_w
-                # Прямое присваивание срезов обычно не требует сложной JIT-компиляции
-                col[:, y, x_idx, :, :, :] = x_pad[:, :, y:y_max:stride, x_idx:x_max:stride].transpose(1, 0, 2, 3)
+        # Создаем матрицу через страйды (самый быстрый способ в numpy)
+        s_n, s_c, s_h, s_w = x_pad.strides
+        col_cpu = np.lib.stride_tricks.as_strided(
+            x_pad, 
+            shape=(n, c, out_h, out_w, kh, kw),
+            strides=(s_n, s_c, s_h * stride, s_w * stride, s_h, s_w)
+        )
         
-        # Решейп в финальную матрицу (C*kh*kw, N*out_h*out_w)
-        res = col.reshape(c * kh * kw, -1)
+        # Формируем финальный вид и возвращаем на GPU
+        res_cpu = col_cpu.transpose(1, 4, 5, 0, 2, 3).reshape(c * kh * kw, -1)
+        
+        # Возвращаем результат на GPU для матричного умножения (оно обычно работает)
+        res = cp.asarray(res_cpu) if is_gpu else res_cpu
         
         profiler.stop()
         return res, out_h, out_w
@@ -915,29 +913,21 @@ class Conv2d(Module):
     def _col2im(self, dcol, x_shape, out_h, out_w):
         profiler.start('col2im')
         is_gpu = HAS_GPU and isinstance(dcol, cp.ndarray)
-        xp = cp if is_gpu else np
+        
+        # Переносим градиент на CPU
+        dcol_cpu = cp.asnumpy(dcol) if is_gpu else dcol
         
         n, c, h, w = x_shape
         kh, kw = self.kernel_size
         pad = self.padding
         stride = self.stride
         
-        # Обратная трансформация
-        dcol_res = dcol.reshape(c, kh, kw, n, out_h, out_w)
-        x_pad = xp.zeros((n, c, h + 2*pad, w + 2*pad), dtype=xp.float32)
+        dcol_res = dcol_cpu.reshape(c, kh, kw, n, out_h, out_w).transpose(3, 0, 1, 2, 4, 5)
+        x_pad = np.zeros((n, c, h + 2*pad, w + 2*pad), dtype=np.float32)
         
         for y in range(kh):
-            y_max = y + stride * out_h
-            for x_idx in range(kw):
-                x_max = x_idx + stride * out_w
-                # Используем промежуточный массив для безопасности
-                patch = dcol_res[:, y, x_idx, :, :, :].transpose(1, 0, 2, 3)
-                x_pad[:, :, y:y_max:stride, x_idx:x_max:stride] += patch
-        
-        profiler.stop()
-        if pad == 0:
-            return x_pad
-        return x_pad[:, :, pad:-pad, pad:-pad]
+            for x in range(kw):
+                x_pad[:, :, y:y+out_h*stride:stride, x:x+out_w*stride:stride] += dcol_res[:, :, y, x, :, :]
     
     def forward(self, x):
         profiler.start('conv_forward')
