@@ -5,6 +5,7 @@ from myframework import (Tensor, Sequential, Conv2d, AvgPool2d, Tanh,
                          Flatten, Linear, CrossEntropyLoss, Adam, no_grad, profiler)
 
 # Загрузка MNIST
+print("Загрузка MNIST...")
 MNIST_train = torchvision.datasets.MNIST('./', download=True, train=True)
 X_train = MNIST_train.data.numpy().astype(np.float32)[:, None, :, :] / 255.0
 y_train = MNIST_train.targets.numpy()
@@ -24,9 +25,9 @@ criterion = CrossEntropyLoss()
 
 batch_size = 128
 n_epochs = 3
-n_samples = 5000 # Для теста
+n_samples = 2000 
 
-print("Начинаем обучение на GPU...")
+print("\nНачинаем обучение (Гибридный режим CPU-Padding / GPU-MatMul)...")
 for epoch in range(n_epochs):
     order = np.random.permutation(n_samples)
     epoch_loss, correct = 0, 0
@@ -35,6 +36,7 @@ for epoch in range(n_epochs):
         optimizer.zero_grad()
         idx = order[i:i+batch_size]
         
+        # Данные грузим на GPU
         X_batch = Tensor(X_train[idx], device='gpu')
         y_batch = Tensor(y_train[idx], device='gpu')
         
@@ -43,11 +45,10 @@ for epoch in range(n_epochs):
         loss.backward()
         optimizer.step()
         
-        # Использование float() предотвращает ошибку memoryview
         epoch_loss += float(loss.data)
         correct += (preds.data.argmax(axis=1) == y_batch.data).sum()
         
-    print(f"Epoch {epoch+1} | Loss: {epoch_loss/(n_samples/batch_size):.4f} | Acc: {float(correct)/n_samples:.2%}")
+    print(f"Epoch {epoch+1:2} | Loss: {epoch_loss/(n_samples/batch_size):.4f} | Acc: {float(correct)/n_samples:.2%}")
 
 # Вывод работы ядер
 profiler.report()

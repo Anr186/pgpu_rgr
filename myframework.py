@@ -8,21 +8,26 @@ except ImportError:
     HAS_GPU = False
     cp = None
 
+# ============ ПРОФИЛИРОВЩИК ============
 class Profiler:
     def __init__(self):
         self.stats = {}
         self.enabled = True
     def start(self, name):
         if not self.enabled: return
-        if HAS_GPU: cp.cuda.Device().synchronize()
+        if HAS_GPU:
+            try: cp.cuda.Device().synchronize()
+            except: pass
         self.stats[name] = self.stats.get(name, 0) - time.perf_counter()
     def stop(self, name):
         if not self.enabled: return
-        if HAS_GPU: cp.cuda.Device().synchronize()
+        if HAS_GPU:
+            try: cp.cuda.Device().synchronize()
+            except: pass
         self.stats[name] += time.perf_counter()
     def report(self):
         print("\n" + "="*45)
-        print("📊 ОТЧЕТ ПРОФИЛИРОВЩИКА")
+        print("📊 ОТЧЕТ ПРОФИЛИРОВЩИКА (GPU/CPU)")
         print("="*45)
         for name, duration in sorted(self.stats.items(), key=lambda x: x[1], reverse=True):
             print(f"{name:25} | {duration:.4f} сек")
@@ -30,6 +35,7 @@ class Profiler:
 
 profiler = Profiler()
 
+# ============ ТЕНЗОР ============
 class Tensor:
     def __init__(self, data, requires_grad=False, device='cpu'):
         self.device = device
@@ -51,6 +57,7 @@ class Tensor:
         xp = cp if self.device == 'gpu' else np
         if grad is None: grad = xp.ones_like(self.data)
         if isinstance(grad, Tensor): grad = grad.data
+
         op, *args = self._ctx
         
         if op == 'add':
@@ -61,6 +68,8 @@ class Tensor:
             if isinstance(b, Tensor) and b.requires_grad:
                 gb = grad
                 while gb.ndim > b.data.ndim: gb = gb.sum(axis=0)
+                for i, dim in enumerate(b.data.shape):
+                    if dim == 1: gb = gb.sum(axis=i, keepdims=True)
                 b.grad = (b.grad if b.grad is not None else xp.zeros_like(b.data)) + gb
                 b.backward(b.grad)
         elif op == 'matmul':
@@ -104,6 +113,19 @@ class Tensor:
         out._ctx = ('reshape', self, old_shape)
         return out
 
+# ============ СЛОИ ============
+class Linear:
+    def __init__(self, in_features, out_features):
+        limit = np.sqrt(6 / (in_features + out_features))
+        self.weight = Tensor(np.random.uniform(-limit, limit, (in_features, out_features)), True)
+        self.bias = Tensor(np.zeros(out_features), True)
+        self.device = 'cpu'
+    def to(self, device):
+        self.device = device
+        self.weight, self.bias = self.weight.to(device), self.bias.to(device)
+        return self
+    def __call__(self, x): return x @ self.weight + self.bias
+
 class Conv2d:
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         self.in_channels, self.out_channels = in_channels, out_channels
@@ -119,45 +141,47 @@ class Conv2d:
         self.weight, self.bias = self.weight.to(device), self.bias.to(device)
         return self
 
-    def _im2col(self, x):
-        xp = cp if self.device == 'gpu' else np
-        n, c, h, w = x.shape
+    def _im2col(self, x_data):
+        # ОПРЕДЕЛЯЕМ ТЕКУЩЕЕ УСТРОЙСТВО
+        is_gpu = HAS_GPU and isinstance(x_data, cp.ndarray)
+        xp = cp if is_gpu else np
+        
+        n, c, h, w = x_data.shape
         kh, kw = self.kernel_size
         p, s = self.padding, self.stride
         oh, ow = (h + 2*p - kh) // s + 1, (w + 2*p - kw) // s + 1
         
-        # ИСПРАВЛЕНИЕ: Используем cp.pad вместо ручного индексирования
+        # УБИРАЕМ ПЕРЕНОС НА ГПУ ДЛЯ ЭТОЙ ЧАСТИ (Используем CPU для паддинга и сборки колонок)
+        # Это обходит CUDA_ERROR_INVALID_IMAGE
+        x_cpu = cp.asnumpy(x_data) if is_gpu else x_data
+        
         if p > 0:
-            x_pad = xp.pad(x, ((0,0), (0,0), (p,p), (p,p)), mode='constant')
+            x_pad = np.pad(x_cpu, ((0,0), (0,0), (p,p), (p,p)), mode='constant')
         else:
-            x_pad = x
+            x_pad = x_cpu
             
-        col = xp.zeros((n, c, kh, kw, oh, ow), dtype=xp.float32)
+        col = np.zeros((n, c, kh, kw, oh, ow), dtype=np.float32)
         for y in range(kh):
             for x_i in range(kw):
                 col[:, :, y, x_i, :, :] = x_pad[:, :, y:y+oh*s:s, x_i:x_i+ow*s:s]
-        return col.transpose(1, 2, 3, 0, 4, 5).reshape(c * kh * kw, -1), oh, ow
+        
+        col_flat = col.transpose(1, 2, 3, 0, 4, 5).reshape(c * kh * kw, -1)
+        
+        # Возвращаем результат на исходное устройство для Matmul
+        return (cp.asarray(col_flat) if is_gpu else col_flat), oh, ow
 
     def __call__(self, x):
         profiler.start('conv2d_forward')
         col, oh, ow = self._im2col(x.data)
-        res = self.weight.data.reshape(self.out_channels, -1) @ col 
+        
+        # Сама операция умножения (Tensor Cores) остается на GPU
+        w_flat = self.weight.data.reshape(self.out_channels, -1)
+        res = w_flat @ col 
+        
         out = res.reshape(self.out_channels, x.data.shape[0], oh, ow).transpose(1, 0, 2, 3)
         final = Tensor(out, True, self.device) + Tensor(self.bias.data.reshape(1, -1, 1, 1), device=self.device)
         profiler.stop('conv2d_forward')
         return final
-
-class Linear:
-    def __init__(self, in_f, out_f):
-        limit = np.sqrt(6 / (in_f + out_f))
-        self.weight = Tensor(np.random.uniform(-limit, limit, (in_f, out_f)), True)
-        self.bias = Tensor(np.zeros(out_f), True)
-        self.device = 'cpu'
-    def to(self, device):
-        self.device = device
-        self.weight, self.bias = self.weight.to(device), self.bias.to(device)
-        return self
-    def __call__(self, x): return x @ self.weight + self.bias
 
 class AvgPool2d:
     def __init__(self, kernel_size, stride=None):
@@ -171,10 +195,13 @@ class AvgPool2d:
         if ks == s:
             out = x.data[:, :, :oh*s, :ow*s].reshape(n, c, oh, ks, ow, ks).mean(axis=(3, 5))
         else:
-            out = xp.zeros((n, c, oh, ow), dtype=xp.float32)
+            # Для пулинга тоже используем CPU, чтобы избежать INVALID_IMAGE при индексации
+            x_cpu = cp.asnumpy(x.data) if x.device == 'gpu' else x.data
+            out_cpu = np.zeros((n, c, oh, ow), dtype=np.float32)
             for i in range(oh):
                 for j in range(ow):
-                    out[:,:,i,j] = x.data[:, :, i*s:i*s+ks, j*s:j*s+ks].mean(axis=(2,3))
+                    out_cpu[:,:,i,j] = x_cpu[:, :, i*s:i*s+ks, j*s:j*s+ks].mean(axis=(2,3))
+            out = cp.asarray(out_cpu) if x.device == 'gpu' else out_cpu
         return Tensor(out, x.requires_grad, x.device)
 
 class Tanh:
