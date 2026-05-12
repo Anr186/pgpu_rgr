@@ -875,8 +875,9 @@ class Conv2d(Module):
     
     def _im2col(self, x):
         profiler.start('im2col')
-        
         is_gpu = HAS_GPU and isinstance(x, cp.ndarray)
+        xp = cp if is_gpu else np
+        
         n, c, h, w = x.shape
         kh, kw = self.kernel_size
         pad = self.padding
@@ -885,53 +886,58 @@ class Conv2d(Module):
         out_h = (h + 2*pad - kh) // stride + 1
         out_w = (w + 2*pad - kw) // stride + 1
         
-        # Решение проблемы CUDA_ERROR_INVALID_IMAGE:
-        # Делаем паддинг на CPU, чтобы избежать сбойного ядра CuPy для .pad()
-        x_cpu = cp.asnumpy(x) if is_gpu else x
-        x_pad_cpu = np.pad(x_cpu, ((0,0), (0,0), (pad,pad), (pad,pad)), mode='constant')
+        # Делаем паддинг. Если на GPU снова упадет - раскомментируйте блок с CPU ниже
+        x_pad = xp.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant')
         
-        # Переносим обратно на GPU
-        x_pad = cp.asarray(x_pad_cpu) if is_gpu else x_pad_cpu
-        xp = cp if is_gpu else np
+        # Используем "трюк со страйдами" (libstrides)
+        # Это создает виртуальное представление патчей без циклов и лишней компиляции
+        s_n, s_c, s_h, s_w = x_pad.strides
         
-        # Создаем матрицу col через базовое выделение памяти
-        col = xp.zeros((n, c, kh, kw, out_h, out_w), dtype=xp.float32)
+        # Новая форма: (n, c, out_h, out_w, kh, kw)
+        new_shape = (n, c, out_h, out_w, kh, kw)
+        new_strides = (s_n, s_c, s_h * stride, s_w * stride, s_h, s_w)
         
-        # Заполняем через простые срезы (они обычно не вызывают ошибку ядра)
-        for y in range(kh):
-            for x_idx in range(kw):
-                col[:, :, y, x_idx, :, :] = x_pad[
-                    :, :, 
-                    y : y + out_h * stride : stride, 
-                    x_idx : x_idx + out_w * stride : stride
-                ]
+        # Создаем представление
+        if is_gpu:
+            col = cp.lib.stride_tricks.as_strided(x_pad, shape=new_shape, strides=new_strides)
+        else:
+            col = np.lib.stride_tricks.as_strided(x_pad, shape=new_shape, strides=new_strides)
+            
+        # Транспонируем и копируем (копирование здесь стабильное)
+        # Нам нужен формат (c * kh * kw, n * out_h * out_w)
+        res = col.transpose(1, 4, 5, 0, 2, 3).reshape(c * kh * kw, -1)
         
-        # Финальный решейп
-        col = col.transpose(1, 2, 3, 0, 4, 5).reshape(c * kh * kw, -1)
+        # ВАЖНО: делаем явную копию, чтобы разорвать связь со страйдами
+        res = xp.array(res, copy=True)
         
         profiler.stop()
-        return col, out_h, out_w
+        return res, out_h, out_w
 
     def _col2im(self, dcol, x_shape, out_h, out_w):
+        # Для col2im используем упрощенный цикл, так как он редко вызывает ошибку образа
         profiler.start('col2im')
-        
         is_gpu = HAS_GPU and isinstance(dcol, cp.ndarray)
         xp = cp if is_gpu else np
+        
         n, c, h, w = x_shape
         kh, kw = self.kernel_size
         pad = self.padding
         stride = self.stride
         
-        dcol = dcol.reshape(c, kh, kw, n, out_h, out_w).transpose(3, 0, 1, 2, 4, 5)
+        dcol_res = dcol.reshape(c, kh, kw, n, out_h, out_w).transpose(3, 0, 1, 2, 4, 5)
         x_pad = xp.zeros((n, c, h + 2*pad, w + 2*pad), dtype=xp.float32)
         
         for y in range(kh):
-            for x_idx in range(kw):
-                x_pad[:, :, y:y+out_h*stride:stride, x_idx:x_idx+out_w*stride:stride] += dcol[:, :, y, x_idx, :, :]
+            y_max = y + stride * out_h
+            for x in range(kw):
+                x_max = x + stride * out_w
+                # Используем += через метод, чтобы избежать сложной компиляции индексации
+                xp.add(x_pad[:, :, y:y_max:stride, x:x_max:stride], 
+                       dcol_res[:, :, y, x, :, :], 
+                       out=x_pad[:, :, y:y_max:stride, x:x_max:stride])
         
         profiler.stop()
-        if pad == 0:
-            return x_pad
+        if pad == 0: return x_pad
         return x_pad[:, :, pad:-pad, pad:-pad]
     
     def forward(self, x):
