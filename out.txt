@@ -1,4 +1,4 @@
-(myenv) anr1@u24:~/Desktop/PGPU/rgr$ python main.py
+myenv) anr1@u24:~/Desktop/PGPU/rgr$ python main.py
 ✅ CUDA/CuPy доступны - GPU активирован
 ============================================================
 🔍 ИНФОРМАЦИЯ О СИСТЕМЕ
@@ -14,8 +14,8 @@ tensor_core_type: Ampere (3rd gen)
 📊 БЕНЧМАРК ТЕНЗОРНЫХ ЯДЕР
 ============================================================
 Умножение матриц 1024x1024:
-  CPU: 5.40 мс
-  GPU (тензорные ядра): 45.49 мс
+  CPU: 4.18 мс
+  GPU (тензорные ядра): 48.42 мс
   Ускорение: 0.1x
 
 ============================================================
@@ -42,38 +42,22 @@ Traceback (most recent call last):
   File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
     return self.forward(x)
            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1131, in forward
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1132, in forward
     x = layer(x)
         ^^^^^^^^
   File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
     return self.forward(x)
            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 969, in forward
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 970, in forward
     self.col, self.out_h, self.out_w = self._im2col(data)
                                        ^^^^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 910, in _im2col
-    patch = x_pad[:, :, y_start:y_start+1, x_start:x_start+1].flatten()
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "cupy/_core/core.pyx", line 988, in cupy._core.core._ndarray_base.flatten
-  File "cupy/_core/core.pyx", line 1007, in cupy._core.core._ndarray_base.flatten
-  File "cupy/_core/_routines_manipulation.pyx", line 130, in cupy._core._routines_manipulation._ndarray_flatten
-  File "cupy/_core/_routines_manipulation.pyx", line 139, in cupy._core._routines_manipulation._ndarray_flatten_order_c
-  File "cupy/_core/core.pyx", line 822, in cupy._core.core._ndarray_base.copy
-  File "cupy/_core/core.pyx", line 792, in cupy._core.core._ndarray_base.astype
-  File "cupy/_core/core.pyx", line 761, in cupy._core.core._ndarray_base._astype
-  File "cupy/_core/_kernel.pyx", line 1380, in cupy._core._kernel.ufunc.__call__
-  File "cupy/_core/_kernel.pyx", line 1407, in cupy._core._kernel.ufunc._get_ufunc_kernel
-  File "cupy/_core/_kernel.pyx", line 1077, in cupy._core._kernel._get_ufunc_kernel
-  File "cupy/_core/_kernel.pyx", line 103, in cupy._core._kernel._get_simple_elementwise_kernel
-  File "cupy/_core/_kernel.pyx", line 91, in cupy._core._kernel._get_simple_elementwise_kernel_from_code
-  File "cupy/_core/core.pyx", line 2552, in cupy._core.core.compile_with_cache
-  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 566, in _compile_module_with_cache
-    return _compile_with_cache_cuda(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 715, in _compile_with_cache_cuda
-    mod.load(cubin)
-  File "cupy/cuda/function.pyx", line 187, in cupy.cuda.function.Module.load
-  File "cupy/cuda/function.pyx", line 189, in cupy.cuda.function.Module.load
-  File "cupy_backends/cuda/api/driver.pyx", line 226, in cupy_backends.cuda.api.driver.moduleLoadData
-  File "cupy_backends/cuda/api/driver.pyx", line 63, in cupy_backends.cuda.api.driver.check_status
-cupy_backends.cuda.api.driver.CUDADriverError: CUDA_ERROR_INVALID_IMAGE: device kernel image is invalid
+  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 912, in _im2col
+    col[:, col_idx] = patch
+    ~~~^^^^^^^^^^^^
+  File "cupy/_core/core.pyx", line 1812, in cupy._core.core._ndarray_base.__setitem__
+  File "cupy/_core/_routines_indexing.pyx", line 60, in cupy._core._routines_indexing._ndarray_setitem
+  File "cupy/_core/_routines_indexing.pyx", line 1079, in cupy._core._routines_indexing._scatter_op
+  File "cupy/_core/_kernel.pyx", line 1321, in cupy._core._kernel.ufunc.__call__
+  File "cupy/_core/internal.pyx", line 352, in cupy._core.internal._broadcast_core
+ValueError: operands could not be broadcast together with shapes (100,) (25,)
+(myenv) anr1@u24:~/Desktop/PGPU/rgr$ 
