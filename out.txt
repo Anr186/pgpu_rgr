@@ -1,34 +1,15 @@
------------------------------------
+(myenv) anr1@u24:~/Desktop/PGPU/rgr$ python main.py
+Загрузка MNIST...
+Размер обучающей выборки: 60000, размер тестовой: 10000
+📸 Пример цифры сохранён как 'sample_image.png'
+Метка первого примера: 5
+Форма данных: (10000, 1, 28, 28)
 Traceback (most recent call last):
-  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 533, in <module>
-    preds = lenet5(X_batch)
-            ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
-    return self.forward(x)
-           ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 1108, in forward
-    x = layer(x)
-        ^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 784, in __call__
-    return self.forward(x)
-           ^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework_gpu.py", line 953, in forward
-    out = cp.add(out, bias_reshaped)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "cupy/_core/_kernel.pyx", line 1380, in cupy._core._kernel.ufunc.__call__
-  File "cupy/_core/_kernel.pyx", line 1407, in cupy._core._kernel.ufunc._get_ufunc_kernel
-  File "cupy/_core/_kernel.pyx", line 1077, in cupy._core._kernel._get_ufunc_kernel
-  File "cupy/_core/_kernel.pyx", line 103, in cupy._core._kernel._get_simple_elementwise_kernel
-  File "cupy/_core/_kernel.pyx", line 91, in cupy._core._kernel._get_simple_elementwise_kernel_from_code
-  File "cupy/_core/core.pyx", line 2552, in cupy._core.core.compile_with_cache
-  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 566, in _compile_module_with_cache
-    return _compile_with_cache_cuda(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 715, in _compile_with_cache_cuda
-    mod.load(cubin)
-  File "cupy/cuda/function.pyx", line 187, in cupy.cuda.function.Module.load
-  File "cupy/cuda/function.pyx", line 189, in cupy.cuda.function.Module.load
-  File "cupy_backends/cuda/api/driver.pyx", line 226, in cupy_backends.cuda.api.driver.moduleLoadData
-  File "cupy_backends/cuda/api/driver.pyx", line 63, in cupy_backends.cuda.api.driver.check_status
-cupy_backends.cuda.api.driver.CUDADriverError: CUDA_ERROR_INVALID_IMAGE: device kernel image is invalid
+  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 73, in <module>
+    lenet5 = LeNet5()
+             ^^^^^^^^
+  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 56, in __init__
+    Conv2d(in_channels=1, out_channels=6, kernel_size=5, padding=2),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Conv2d.__init__() got an unexpected keyword argument 'in_channels'
 (myenv) anr1@u24:~/Desktop/PGPU/rgr$ 
