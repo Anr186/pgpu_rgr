@@ -12,6 +12,8 @@ myenv/
 *.pdf
 *.jpg
 *.jpeg
+*.nsys-rep
+*.sqlite
 
 # Конкретные файлы из вашего проекта
 training_history.txt

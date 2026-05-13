@@ -36,7 +36,7 @@ plt.title(f"Пример цифры: {y_train[0]}")
 plt.savefig('sample_image.png', dpi=150, bbox_inches='tight')
 plt.show()
 plt.close()
-print("📸 Пример цифры сохранён как 'sample_image.png'")
+print("Пример цифры сохранён как 'sample_image.png'")
 
 print(f"Метка первого примера: {y_train[0]}")
 
@@ -182,12 +182,12 @@ with open('training_history.txt', 'w', encoding='utf-8') as f:
     f.write(f"Лучшая точность на тесте: {max(test_accuracy_history)*100:.2f}% (эпоха {test_accuracy_history.index(max(test_accuracy_history)) + 1})\n")
     f.write(f"Финальная точность на тесте: {test_accuracy_history[-1]*100:.2f}%\n")
     f.write(f"Финальные потери на тесте: {test_loss_history[-1]:.4f}\n")
-print("📊 Таблица метрик сохранена как 'training_history.txt'")
+print("Таблица метрик сохранена как 'training_history.txt'")
 
 # 2. Сохраняем как CSV
 df_metrics = pd.DataFrame(metrics_data)
 df_metrics.to_csv('training_metrics.csv', index=False)
-print("📊 CSV с метриками сохранён как 'training_metrics.csv'")
+print("CSV с метриками сохранён как 'training_metrics.csv'")
 
 # ============ ФИНАЛЬНОЕ ТЕСТИРОВАНИЕ ============
 with no_grad():
@@ -210,7 +210,7 @@ plt.tight_layout()
 plt.savefig('training_loss.png', dpi=150, bbox_inches='tight')
 plt.show()
 plt.close()
-print("📈 График потерь сохранён как 'training_loss.png'")
+print("График потерь сохранён как 'training_loss.png'")
 
 # График 2: Динамика точности
 plt.figure(figsize=(10, 5))
@@ -232,7 +232,7 @@ plt.tight_layout()
 plt.savefig('training_accuracy.png', dpi=150, bbox_inches='tight')
 plt.show()
 plt.close()
-print("📈 График точности сохранён как 'training_accuracy.png'")
+print("График точности сохранён как 'training_accuracy.png'")
 
 # График 3: Совмещённый график потерь и точности
 fig, ax1 = plt.subplots(figsize=(12, 5))
@@ -258,7 +258,7 @@ fig.tight_layout()
 plt.savefig('lenet5_training_results.png', dpi=150, bbox_inches='tight')
 plt.show()
 plt.close()
-print("📈 Совмещённый график сохранён как 'lenet5_training_results.png'")
+print("Совмещённый график сохранён как 'lenet5_training_results.png'")
 
 # ============ ВИЗУАЛИЗАЦИЯ ФИЛЬТРОВ ============
 def visualize_filters(model, layer_idx=0):
@@ -340,7 +340,7 @@ def show_predictions(model, X, y, num_examples=10):
         for p in predictions_list:
             status = "✓" if p['True'] == p['Pred'] else "✗"
             f.write(f"{status} True: {p['True']} → Pred: {p['Pred']} (prob: {p['Prob']:.3f})\n")
-    print("🖼️ Примеры предсказаний сохранены как 'predictions.png' и 'predictions_list.txt'")
+    print("Примеры предсказаний сохранены как 'predictions.png' и 'predictions_list.txt'")
     
     return correct_count / num_examples
 
@@ -377,4 +377,4 @@ with open('final_statistics.txt', 'w', encoding='utf-8') as f:
     f.write(f"Финальная точность на тесте: {test_accuracy_history[-1]*100:.2f}%\n")
     f.write(f"Финальные потери на тесте: {test_loss_history[-1]:.4f}\n")
     f.write(f"Количество параметров: {sum(p.data.size for p in lenet5.parameters())}\n")
-print("📄 Финальная статистика сохранена как 'final_statistics.txt'")
+print("Финальная статистика сохранена как 'final_statistics.txt'")
