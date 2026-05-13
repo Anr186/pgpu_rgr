@@ -1,38 +1,127 @@
-(myenv) anr1@u24:~/Desktop/PGPU/rgr$ python main.py
-Загрузка MNIST...
-
-Начинаем обучение (Гибридный режим: индексация на CPU, умножение на GPU)...
-------------------------------------------------------------
+(base) C:\Users\admin\Desktop\kaka\pgpu_rgr>python main.py
 Traceback (most recent call last):
-  File "/home/anr1/Desktop/PGPU/rgr/main.py", line 43, in <module>
-    preds = model(X_batch)
-            ^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework.py", line 205, in __call__
-    for l in self.layers: x = l(x)
-                              ^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myframework.py", line 150, in __call__
-    res = self.weight.data.reshape(self.out_channels, -1) @ col 
-          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~
-  File "cupy/_core/core.pyx", line 1513, in cupy._core.core._ndarray_base.__matmul__
-  File "cupy/_core/_routines_linalg.pyx", line 858, in cupy._core._routines_linalg.matmul
-  File "cupy/_core/_routines_linalg.pyx", line 538, in cupy._core._routines_linalg.dot
-  File "cupy/_core/_routines_linalg.pyx", line 581, in cupy._core._routines_linalg.tensordot_core
-  File "cupy/_core/core.pyx", line 792, in cupy._core.core._ndarray_base.astype
-  File "cupy/_core/core.pyx", line 761, in cupy._core.core._ndarray_base._astype
-  File "cupy/_core/_kernel.pyx", line 1380, in cupy._core._kernel.ufunc.__call__
-  File "cupy/_core/_kernel.pyx", line 1407, in cupy._core._kernel.ufunc._get_ufunc_kernel
-  File "cupy/_core/_kernel.pyx", line 1077, in cupy._core._kernel._get_ufunc_kernel
-  File "cupy/_core/_kernel.pyx", line 103, in cupy._core._kernel._get_simple_elementwise_kernel
-  File "cupy/_core/_kernel.pyx", line 91, in cupy._core._kernel._get_simple_elementwise_kernel_from_code
-  File "cupy/_core/core.pyx", line 2552, in cupy._core.core.compile_with_cache
-  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 566, in _compile_module_with_cache
-    return _compile_with_cache_cuda(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/anr1/Desktop/PGPU/rgr/myenv/lib/python3.12/site-packages/cupy/cuda/compiler.py", line 651, in _compile_with_cache_cuda
-    mod.load(cubin)
-  File "cupy/cuda/function.pyx", line 187, in cupy.cuda.function.Module.load
-  File "cupy/cuda/function.pyx", line 189, in cupy.cuda.function.Module.load
-  File "cupy_backends/cuda/api/driver.pyx", line 226, in cupy_backends.cuda.api.driver.moduleLoadData
-  File "cupy_backends/cuda/api/driver.pyx", line 63, in cupy_backends.cuda.api.driver.check_status
-cupy_backends.cuda.api.driver.CUDADriverError: CUDA_ERROR_INVALID_IMAGE: device kernel image is invalid
-(myenv) anr1@u24:~/Desktop/PGPU/rgr$ 
+  File "C:\Users\admin\Desktop\kaka\pgpu_rgr\main.py", line 11, in <module>
+    import cupy as cp
+ModuleNotFoundError: No module named 'cupy'
+
+(base) C:\Users\admin\Desktop\kaka\pgpu_rgr>conda activate pgpu_rgr
+
+(pgpu_rgr) C:\Users\admin\Desktop\kaka\pgpu_rgr>python main.py
+Загрузка MNIST...
+Размер обучающей выборки: 60000, размер тестовой: 10000
+📸 Пример цифры сохранён как 'sample_image.png'
+Метка первого примера: 5
+Форма данных: (10000, 1, 28, 28)
+Модель LeNet5 создана
+Количество параметров: 61706
+
+Начинаем обучение...
+----------------------------------------------------------------------
+ Epoch | Train Loss | Train Acc |  Test Acc |  Test Loss
+----------------------------------------------------------------------
+     1 |     0.6664 |    81.60% |    91.11% |     0.3224
+     2 |     0.2783 |    92.17% |    92.95% |     0.2451
+     3 |     0.2087 |    93.91% |    94.17% |     0.1962
+     4 |     0.1615 |    95.45% |    95.14% |     0.1706
+     5 |     0.1282 |    96.23% |    95.49% |     0.1500
+     6 |     0.1102 |    96.92% |    96.14% |     0.1361
+     7 |     0.0898 |    97.42% |    95.65% |     0.1342
+     8 |     0.0794 |    97.66% |    96.75% |     0.1080
+     9 |     0.0630 |    98.27% |    96.53% |     0.1106
+    10 |     0.0529 |    98.57% |    96.86% |     0.1007
+----------------------------------------------------------------------
+📊 Таблица метрик сохранена как 'training_history.txt'
+📊 CSV с метриками сохранён как 'training_metrics.csv'
+
+Финальная точность на тестовой выборке: 0.9686 (96.86%)
+📈 График потерь сохранён как 'training_loss.png'
+📈 График точности сохранён как 'training_accuracy.png'
+📈 Совмещённый график сохранён как 'lenet5_training_results.png'
+🔍 Фильтры сохранены как 'filters.png'
+
+==================================================
+ВИЗУАЛИЗАЦИЯ ПРЕДСКАЗАНИЙ
+==================================================
+🖼️ Примеры предсказаний сохранены как 'predictions.png' и 'predictions_list.txt'
+Точность на 10 случайных примерах: 80.0%
+
+==================================================
+ФИНАЛЬНАЯ СТАТИСТИКА
+==================================================
+Лучшая точность на тесте: 0.9686 (96.86%) (эпоха 10)
+Финальная точность на тесте: 0.9686 (96.86%)
+Финальные потери на тесте: 0.1007
+Количество параметров модели: 61706
+==================================================
+📄 Финальная статистика сохранена как 'final_statistics.txt'
+
+(pgpu_rgr) C:\Users\admin\Desktop\kaka\pgpu_rgr>python main.py
+Загрузка MNIST...
+Размер обучающей выборки: 60000, размер тестовой: 10000
+📸 Пример цифры сохранён как 'sample_image.png'
+Метка первого примера: 5
+Форма данных: (10000, 1, 28, 28)
+Модель LeNet5 создана
+Количество параметров: 3911114
+
+Начинаем обучение...
+----------------------------------------------------------------------
+ Epoch | Train Loss | Train Acc |  Test Acc |  Test Loss
+----------------------------------------------------------------------
+     1 |     2.8021 |    32.88% |    56.00% |     2.2018
+     2 |     1.4921 |    65.25% |    67.77% |     1.1943
+     3 |     0.7918 |    76.21% |    79.27% |     0.6624
+     4 |     0.5879 |    82.43% |    86.89% |     0.4592
+     5 |     0.4316 |    87.66% |    89.33% |     0.3830
+     6 |     0.3724 |    89.59% |    88.79% |     0.4055
+     7 |     0.3581 |    89.74% |    91.02% |     0.3153
+     8 |     0.2873 |    91.76% |    91.27% |     0.2961
+     9 |     0.2690 |    91.89% |    91.98% |     0.2766
+    10 |     0.2456 |    92.73% |    92.56% |     0.2565
+    11 |     0.2217 |    93.52% |    92.95% |     0.2469
+    12 |     0.2135 |    93.95% |    92.96% |     0.2394
+    13 |     0.2003 |    94.28% |    93.37% |     0.2212
+    14 |     0.1817 |    94.85% |    93.99% |     0.2053
+    15 |     0.1640 |    95.18% |    94.33% |     0.1968
+    16 |     0.1570 |    95.45% |    94.65% |     0.1892
+    17 |     0.1505 |    95.77% |    94.76% |     0.1828
+    18 |     0.1437 |    95.97% |    94.87% |     0.1781
+    19 |     0.1334 |    96.27% |    94.98% |     0.1747
+    20 |     0.1259 |    96.52% |    95.01% |     0.1676
+    21 |     0.1216 |    96.65% |    95.14% |     0.1636
+    22 |     0.1129 |    96.80% |    95.42% |     0.1594
+    23 |     0.1109 |    97.01% |    95.40% |     0.1551
+    24 |     0.1037 |    97.16% |    95.44% |     0.1509
+    25 |     0.0980 |    97.27% |    95.58% |     0.1480
+    26 |     0.0961 |    97.43% |    95.76% |     0.1445
+    27 |     0.0897 |    97.69% |    95.82% |     0.1424
+    28 |     0.0877 |    97.69% |    95.81% |     0.1391
+    29 |     0.0861 |    97.84% |    95.96% |     0.1369
+    30 |     0.0773 |    98.05% |    95.87% |     0.1340
+----------------------------------------------------------------------
+📊 Таблица метрик сохранена как 'training_history.txt'
+📊 CSV с метриками сохранён как 'training_metrics.csv'
+
+Финальная точность на тестовой выборке: 0.9587 (95.87%)
+📈 График потерь сохранён как 'training_loss.png'
+📈 График точности сохранён как 'training_accuracy.png'
+📈 Совмещённый график сохранён как 'lenet5_training_results.png'
+🔍 Фильтры сохранены как 'filters.png'
+
+==================================================
+ВИЗУАЛИЗАЦИЯ ПРЕДСКАЗАНИЙ
+==================================================
+🖼️ Примеры предсказаний сохранены как 'predictions.png' и 'predictions_list.txt'
+Точность на 10 случайных примерах: 100.0%
+
+==================================================
+ФИНАЛЬНАЯ СТАТИСТИКА
+==================================================
+Лучшая точность на тесте: 0.9596 (95.96%) (эпоха 29)
+Финальная точность на тесте: 0.9587 (95.87%)
+Финальные потери на тесте: 0.1340
+Количество параметров модели: 3911114
+==================================================
+📄 Финальная статистика сохранена как 'final_statistics.txt'
+
+(pgpu_rgr) C:\Users\admin\Desktop\kaka\pgpu_rgr>
