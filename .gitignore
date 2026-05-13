@@ -29,7 +29,6 @@ gpu_benchmark.txt
 profile_report.txt
 gpu_training_results.png
 sample_image.png
-
 # Файлы Python
 *.pyc
 *.pyo
