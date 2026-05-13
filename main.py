@@ -41,18 +41,18 @@ print("Пример цифры сохранён как 'sample_image.png'")
 print(f"Метка первого примера: {y_train[0]}")
 
 # Нормализация и изменение формы
-X_train = X_train.reshape(-1, 1, 28, 28).astype(np.float32) / 255.0
-X_test = X_test.reshape(-1, 1, 28, 28).astype(np.float32) / 255.0
+X_train = (X_train.reshape(-1, 1, 28, 28) / 255.0).astype(np.float16)
+X_test = (X_test.reshape(-1, 1, 28, 28) / 255.0).astype(np.float16)
 
 # Для ускорения возьмём подвыборку
-n_samples = 10000
-X_train = X_train[:n_samples]
-y_train = y_train[:n_samples]
+# n_samples = 10000
+# X_train = X_train[:n_samples]
+# y_train = y_train[:n_samples]
 
 print(f"Форма данных: {X_train.shape}")
-X_train_gpu = cp.array(X_train)
+X_train_gpu = cp.array(X_train, dtype=cp.float16)
 y_train_gpu = cp.array(y_train)
-X_test_gpu = cp.array(X_test)
+X_test_gpu = cp.array(X_test, dtype=cp.float16)
 y_test_gpu = cp.array(y_test)
 
 # ============ ОПРЕДЕЛЕНИЕ МОДЕЛИ LeNet-5 ============
